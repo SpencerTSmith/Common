@@ -80,8 +80,6 @@ typedef ptrdiff_t isize;
 #define MB(n) (1024 * KB(n))
 #define GB(n) (1024 * MB(n))
 
-#define RGB_I2F(fl) ((fl) / 255.f)
-
 #define THOUSAND(n) (1000 * (n))
 #define MILLION(n) (1000 * THOUSAND(n))
 #define BILLION(n) (1000 * MILLION(n))
@@ -130,19 +128,21 @@ void log_message(Log_Level level, const char *file, usize line, const char *mess
   }                                                                     \
   while (0)
 #define LOG_ERROR(message, ...) log_message(LOG_ERROR, __FILE__, __LINE__, message, ##__VA_ARGS__)
+
 #ifdef DEBUG
-#define LOG_DEBUG(message, ...) log_message(LOG_DEBUG, __FILE__, __LINE__, message, ##__VA_ARGS__)
+  #define LOG_DEBUG(message, ...) log_message(LOG_DEBUG, __FILE__, __LINE__, message, ##__VA_ARGS__)
 #else
-#define LOG_DEBUG(message, ...) VOID_PROC
+  #define LOG_DEBUG(message, ...) VOID_PROC
 #endif // DEBUG
+       //
 #define LOG_INFO(message, ...) log_message(LOG_INFO, __FILE__, __LINE__, message, ##__VA_ARGS__)
 
 // Just a little wrapper, don't have to && your message, and complains if you don't
 // give it a message
 #ifdef DEBUG
-#define ASSERT(expr, message) assert(expr && message)
+  #define ASSERT(expr, message) assert(expr && message)
 #else
-#define ASSERT(expr, message, ...) VOID_PROC
+  #define ASSERT(expr, message) VOID_PROC
 #endif // DEBUG
 
 /////////////////
@@ -190,7 +190,55 @@ Scratch scratch_begin(Bump *bump);
 void scratch_end(Scratch *scratch);
 
 #ifdef __cplusplus
+} // extern "C"
+#endif
+
+// C++ Garbage
+#ifdef __cplusplus
+
+// Bounds checked array with length info embedded
+template <typename T, isize N>
+struct Array
+{
+  T     data[N];
+  isize count = N; // Don't modify it, obviously
+
+  T& operator[](isize i)
+  {
+    ASSERT(i < count, "Array bounds check index greater than count");
+    return data[i];
+  }
+};
+
+template <typename T>
+struct Slice
+{
+  T     *data;
+  isize count; // Don't modify it, obviously
+               //
+  T& operator[](isize i)
+  {
+    ASSERT(i < count, "Array bounds check index greater than count");
+    return data[i];
+  }
+};
+
+// begin inclusive, end exclusive
+template <typename T, isize N>
+Slice<T> slice(Array<T, N> array, isize begin, isize end)
+{
+  ASSERT(begin >= 0 && end <= array.count, "Slice bounds must not lie outside backing array bounds");
+  ASSERT(begin < end, "Slice begin must come before end");
+
+  isize count = end - begin;
+
+  Slice<T> slice = {};
+  slice.data = &array.data[begin];
+  slice.count = count;
+
+  return slice;
 }
+
 #endif
 
 /////////////////
@@ -215,7 +263,7 @@ usize read_file_to_memory(const char *name, u8 *buffer, usize buffer_size)
 }
 
 #ifndef LOG_TITLE
-#define LOG_TITLE "UNTITLED"
+#define LOG_TITLE "COMMON"
 #endif
 const char *level_strings[] =
 {
@@ -224,22 +272,26 @@ const char *level_strings[] =
 
 void log_message(Log_Level level, const char *file, usize line, const char *message, ...)
 {
+  FILE *stream = stderr;
   if (level <= LOG_ERROR)
   {
-    fprintf(stderr, "[" LOG_TITLE " %s]: (%s:%lu) ", level_strings[level], file, line);
+    fprintf(stream, "[" LOG_TITLE " %s]: (%s:%lu) ", level_strings[level], file, line);
   }
   else
   {
-    FILE *stream = level == LOG_INFO ? stdout : stderr;
+    if (level == LOG_INFO)
+    {
+      stream = stdout;
+    }
     fprintf(stream, "[" LOG_TITLE " %s]: ", level_strings[level]);
   }
 
   va_list args;
   va_start(args, message);
-  vfprintf(stderr, message, args);
+  vfprintf(stream, message, args);
   va_end(args);
 
-  fprintf(stderr, "\n");
+  fprintf(stream, "\n");
 }
 
 Bump bump_make(isize reserve_size)
