@@ -104,6 +104,16 @@ typedef ptrdiff_t isize;
 
 usize read_file_to_memory(const char* name, u8 *buffer, usize buffer_size);
 
+// No Null terminated strings!
+typedef struct String String;
+struct String
+{
+  u8    *data;
+  isize count;
+};
+
+#define String(s) (String){(u8 *)s, STATIC_ARRAY_COUNT(s) - 1}
+
 /////////////////
 // LOGGING
 ////////////////
@@ -200,14 +210,27 @@ void scratch_end(Scratch *scratch);
 template <typename T, isize N>
 struct Array
 {
-  T     data[N];
-  isize count = N; // Don't modify it, obviously
+  T data[N];
 
+  static constexpr isize count() { return N; }
+
+  // Access
   T& operator[](isize i)
   {
-    ASSERT(i < count, "Array bounds check index greater than count");
+    ASSERT(i < N, "Array bounds check index greater than count");
     return data[i];
   }
+  const T& operator[](isize i) const
+  {
+    ASSERT(i < N, "Array bounds check index greater than count");
+    return data[i];
+  }
+
+  // Iteration
+  T* begin() { return data; }
+  T* end()   { return data + N; }
+  const T* begin() const { return data; }
+  const T* end()   const { return data + N; }
 };
 
 template <typename T>
@@ -215,31 +238,57 @@ struct Slice
 {
   T     *data;
   isize count; // Don't modify it, obviously
-               //
+
+  // Access
   T& operator[](isize i)
   {
     ASSERT(i < count, "Array bounds check index greater than count");
     return data[i];
   }
+  const T& operator[](isize i) const
+  {
+    ASSERT(i < count, "Array bounds check index greater than count");
+    return data[i];
+  }
+
+  // Iteration
+  T* begin() { return data; }
+  T* end()   { return data + count; }
+  const T* begin() const { return data; }
+  const T* end()   const { return data + count; }
 };
 
 // begin inclusive, end exclusive
 template <typename T, isize N>
-Slice<T> slice(Array<T, N> array, isize begin, isize end)
+Slice<T> slice(Array<T, N> *array, isize begin, isize end)
 {
-  ASSERT(begin >= 0 && end <= array.count, "Slice bounds must not lie outside backing array bounds");
+  ASSERT(begin >= 0 && end <= array->count(), "Slice bounds must not lie outside backing array bounds");
   ASSERT(begin < end, "Slice begin must come before end");
 
   isize count = end - begin;
 
   Slice<T> slice = {};
-  slice.data = &array.data[begin];
+  slice.data = &(*array)[begin];
+  slice.count = count;
+
+  return slice;
+}
+template <typename T>
+Slice<T> slice(Slice<T> _slice, isize begin, isize end)
+{
+  ASSERT(begin >= 0 && end <= _slice.count, "Slice bounds must not lie outside backing array bounds");
+  ASSERT(begin < end, "Slice begin must come before end");
+
+  isize count = end - begin;
+
+  Slice<T> slice = {};
+  slice.data = &_slice.data[begin];
   slice.count = count;
 
   return slice;
 }
 
-#endif
+#endif // __cplusplus C++ Garbage
 
 /////////////////
 // IMPLEMENT
