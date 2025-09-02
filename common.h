@@ -114,6 +114,8 @@ struct String
 
 #define String(s) (String){(u8 *)s, STATIC_ARRAY_COUNT(s) - 1}
 
+b8 strings_equal(String a, String b);
+
 /////////////////
 // LOGGING
 ////////////////
@@ -182,8 +184,8 @@ void bump_clear(Bump *bump);
 // specify the bump, the number of elements, and the type... c(ounted)alloc
 #define bump_calloc(b, count, T) (T *)bump_alloc((b), sizeof(T) * (count), alignof(T))
 
-// t(yped)alloc, useful for structs
-#define bump_talloc(b, T) bump_calloc(b, 1, T)
+// Useful for structs, much like new in other languages
+#define bump_new(b, T) bump_calloc(b, 1, T)
 
 // Scratch Use Case -------------------------------------------------------------
 
@@ -309,6 +311,11 @@ usize read_file_to_memory(const char *name, u8 *buffer, usize buffer_size)
   fclose(file);
 
   return byte_count;
+}
+
+b8 strings_equal(String a, String b)
+{
+  return a.count ==b.count && !memcmp(a.data, b.data, a.count);
 }
 
 #ifndef LOG_TITLE
