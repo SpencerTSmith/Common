@@ -290,6 +290,50 @@ Slice<T> slice(Slice<T> _slice, isize begin, isize end)
   return slice;
 }
 
+// Acts like a dynamic array, append, pop, etc but is backed by a statically sized array
+template <typename T, isize N>
+struct Bump_Array
+{
+  T     data[N];
+  isize count;
+
+  static constexpr isize capacity() { return N; }
+
+  // Access
+  T& operator[](isize i)
+  {
+    ASSERT(i < count, "Array bounds check index greater than count");
+    return data[i];
+  }
+  const T& operator[](isize i) const
+  {
+    ASSERT(i < count, "Array bounds check index greater than count");
+    return data[i];
+  }
+
+  // Iteration
+  T* begin() { return data; }
+  T* end()   { return data + count; }
+  const T* begin() const { return data; }
+  const T* end()   const { return data + count; }
+};
+
+template <typename T, isize N>
+void bump_array_add(Bump_Array<T, N> *array, T item)
+{
+  ASSERT(array->count < array->capacity(), "Bump Array is full!");
+
+  array->data[array->count] = item;
+  array->count += 1;
+}
+
+template <typename T, isize N>
+void bump_array_pop(Bump_Array<T, N> *array)
+{
+  ZERO_SIZE(&array->data[array->count - 1], sizeof(T));
+  array->count -= 1;
+}
+
 #endif // __cplusplus C++ Garbage
 
 /////////////////
