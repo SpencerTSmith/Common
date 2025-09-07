@@ -321,7 +321,7 @@ struct Bump_Array
 template <typename T, isize N>
 void bump_array_add(Bump_Array<T, N> *array, T item)
 {
-  ASSERT(array->count < array->capacity(), "Bump Array is full!");
+  ASSERT(array->count < N, "Bump Array is full!");
 
   array->data[array->count] = item;
   array->count += 1;
