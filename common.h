@@ -32,6 +32,8 @@ extern "C"
 #include <string.h>
 #include <stdarg.h>
 
+#include <sys/stat.h>
+
 /////////////////
 // QOL/UTILITY
 ////////////////
@@ -96,13 +98,17 @@ typedef ptrdiff_t isize;
 // You may prefer to do it in the traditional using the above ENUM_* macros
 //
 // NOTE(ss): Idea from https://philliptrudeau.com/blog/x-macro
-#define ENUM_TABLE(Enum_Name) \
-  enum Enum_Name              \
-  { Enum_Name(ENUM_MEMBER) }; \
+#define ENUM_TABLE(Enum_Name)                  \
+  typedef enum Enum_Name                       \
+  { Enum_Name(ENUM_MEMBER) } Enum_Name;        \
   static const char *Enum_Name ## _strings[] = \
   { Enum_Name(ENUM_STRING) };
 
-usize read_file_to_memory(const char* name, u8 *buffer, usize buffer_size);
+// Only useful if you know exactly how big the file is ahead of time, otherwise probably put on an arena if don't know...
+// or use file_size()
+usize read_file_to_memory(const char *name, u8 *buffer, usize buffer_size);
+
+usize file_size(const char *name);
 
 // No Null terminated strings!
 typedef struct String String;
@@ -113,6 +119,8 @@ struct String
 };
 
 #define String(s) (String){(u8 *)s, STATIC_ARRAY_COUNT(s) - 1}
+
+#define String_Format(s) (int)s.count, s.data
 
 b8 strings_equal(String a, String b);
 
@@ -189,6 +197,9 @@ void *arena_alloc(Arena *arena, isize size, isize alignment);
 void arena_pop_to(Arena *arena, isize offset);
 void arena_pop(Arena *arena, isize size);
 void arena_clear(Arena *arena);
+
+// Reads the entire thing and returns a pointer to the first byte
+u8 *read_file_to_arena(Arena *arena, const char *name);
 
 // Helper Macros ----------------------------------------------------------------
 
@@ -366,6 +377,37 @@ usize read_file_to_memory(const char *name, u8 *buffer, usize buffer_size)
   fclose(file);
 
   return byte_count;
+}
+
+usize file_size(const char *name)
+{
+  // Seriously???
+#if _WIN32
+  struct __stat64 stats;
+  _stat64(name, &stats);
+#else
+  struct stat stats;
+  stat(name, &stats);
+#endif
+
+  return stats.st_size;
+}
+
+u8 *read_file_to_arena(Arena *arena, const char *name)
+{
+  usize buffer_size = file_size(name);
+
+  // Just in case we fail reading we won't commit any allocations
+  Arena save = *arena;
+  u8 *buffer = arena_calloc(arena, buffer_size, u8);
+
+  if (read_file_to_memory(name, buffer, buffer_size) != buffer_size)
+  {
+    LOG_ERROR("Unable to read file: %s", name);
+    *arena = save; // Rollback allocation
+  }
+
+  return buffer;
 }
 
 b8 strings_equal(String a, String b)
